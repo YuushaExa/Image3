@@ -94,22 +94,23 @@
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
+                    console.log(`Canvas clicked at: (${x}, ${y})`);
                     inpaintSpot(x, y);
                 }
             }
 
             function inpaintSpot(x, y) {
                 const radius = cursorSize / 2;
-
-                // Extract the patch to be replaced
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
                 const data = imageData.data;
+                console.log('Patch to be replaced:', data);
 
-                // Find the best matching patch from the image
-                const similarPatchIndex = findCorrespondingPixel(x, y, data, radius);
+                const similarPatchIndex = findCorrespondingPixel(x, y, canvasData.data, radius);
                 if (similarPatchIndex !== -1) {
-                    // Blend the patches using advanced blending techniques
-                    contentAwareFill(data, data.slice(similarPatchIndex, similarPatchIndex + radius * radius * 4), radius);
+                    const similarPatch = canvasData.data.slice(similarPatchIndex, similarPatchIndex + radius * radius * 4);
+                    console.log('Similar patch found:', similarPatch);
+
+                    contentAwareFill(data, similarPatch, radius);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -168,7 +169,6 @@
                     if (dist < radius) {
                         const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
                         if (targetIndex !== -1) {
-                            // Blend using advanced blending techniques (e.g., Poisson blending, etc.)
                             const weight = gauss(dist);
                             const sourceWeight = weight;
                             const targetWeight = 1 - weight;
