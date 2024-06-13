@@ -94,8 +94,9 @@
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
-                    console.log(`Canvas clicked at: (${x}, ${y})`);
                     inpaintSpot(x, y);
+                    // Redraw the entire image on the canvas after inpainting
+                    context.drawImage(image, 0, 0);
                 }
             }
 
@@ -103,83 +104,104 @@
                 const radius = cursorSize / 2;
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
                 const data = imageData.data;
-                console.log('Patch to be replaced:', data);
 
-                const similarPatchIndex = findCorrespondingPixel(x, y, canvasData.data, radius);
-                if (similarPatchIndex !== -1) {
-                    const similarPatch = canvasData.data.slice(similarPatchIndex, similarPatchIndex + radius * radius * 4);
-                    console.log('Similar patch found:', similarPatch);
-
-                    contentAwareFill(data, similarPatch, radius);
+                const patchSize = radius * 2;
+                const similarPatch = findBestPatch(x, y, patchSize);
+                if (similarPatch) {
+                    contentAwareFill(data, similarPatch.data, radius);
                     context.putImageData(imageData, x - radius, y - radius);
-                    context.drawImage(image, 0, 0);
                 }
             }
 
-            function findCorrespondingPixel(dx, dy, targetData, radius) {
-                const patchSize = radius * 2;
-                let bestMatchIndex = -1;
-                let lowestScore = Infinity;
+            function findBestPatch(x, y, size) {
+                const searchRadius = 30;
+                let bestPatch = null;
+                let bestScore = Infinity;
 
-                for (let offsetX = -radius; offsetX <= radius; offsetX++) {
-                    for (let offsetY = -radius; offsetY <= radius; offsetY++) {
-                        const targetX = dx + offsetX;
-                        const targetY = dy + offsetY;
-                        if (targetX < 0 || targetY < 0 || targetX >= canvas.width || targetY >= canvas.height) {
+                for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+                    for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+                        if (x + dx < 0 || y + dy < 0 || x + dx + size >= canvas.width || y + dy + size >= canvas.height) {
                             continue;
                         }
 
-                        const targetIndex = (targetY * canvas.width + targetX) * 4;
-                        const score = computePatchScore(targetData, targetIndex, patchSize);
-
-                        if (score < lowestScore) {
-                            lowestScore = score;
-                            bestMatchIndex = targetIndex;
+                        const patchData = extractPatchData(x + dx, y + dy, size);
+                        const score = computePatchScore(patchData);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestPatch = { x: x + dx, y: y + dy, data: patchData };
                         }
                     }
                 }
 
-                return bestMatchIndex;
+                return bestPatch;
             }
 
-            function computePatchScore(data, index, patchSize) {
-                let score = 0;
-                for (let i = 0; i < patchSize; i++) {
-                    for (let j = 0; j < patchSize; j++) {
-                        const offset = (j * patchSize + i) * 4;
-                        const r = data[index + offset];
-                        const g = data[index + offset + 1];
-                        const b = data[index + offset + 2];
+            function extractPatchData(x, y, size) {
+                const startX = Math.max(0, x);
+                const startY = Math.max(0, y);
+                const endX = Math.min(canvas.width, x + size);
+                const endY = Math.min(canvas.height, y + size);
+                return context.getImageData(startX, startY, endX - startX, endY - startY).data;
+            }
 
-                        score += r * r + g * g + b * b;
-                    }
+            function computePatchScore(data) {
+                let r = 0, g = 0, b = 0, count = data.length / 4;
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i];
+                    g += data[i + 1];
+                    b += data[i + 2];
                 }
+                r /= count;
+                g /= count;
+                b /= count;
+
+                let score = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    score += Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b);
+                }
+
                 return score;
             }
 
-function contentAwareFill(sourceData, targetData, radius) {
-    const length = sourceData.length;
-    const sigma = radius / 3;
-    const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+            function contentAwareFill(sourceData, targetData, radius) {
+                const length = sourceData.length;
+                const sigma = radius / 3;
+                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
 
-    for (let i = 0; i < length; i += 4) {
-        const dx = (i / 4) % (radius * 2) - radius;
-        const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+                for (let i = 0; i < length; i += 4) {
+                    const dx = (i / 4) % (radius * 2) - radius;
+                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < radius) {
-            const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
-            if (targetIndex !== -1) {
-                const sourceWeight = gauss(dist);
-                const targetWeight = 1 - sourceWeight;
+                    if (dist < radius) {
+                        const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
+                        if (targetIndex !== -1) {
+                            const sourceWeight = gauss(dist);
+                            const targetWeight = 1 - sourceWeight;
 
-                sourceData[i] = Math.floor(sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex]);
-                sourceData[i + 1] = Math.floor(sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1]);
-                sourceData[i + 2] = Math.floor(sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2]);
-                // Preserve alpha channel
-                sourceData[i + 3] = sourceData[i + 3]; // No change to alpha channel
+                            sourceData[i] = Math.floor(sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex]);
+                            sourceData[i + 1] = Math.floor(sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1]);
+                            sourceData[i + 2] = Math.floor(sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2]);
+                            // Preserve alpha channel
+                            sourceData[i + 3] = sourceData[i + 3]; // No change to alpha channel
+                        }
+                    }
+                }
             }
-        }
+
+       function findCorrespondingPixel(dx, dy, targetData, radius) {
+    // Calculate the coordinates of the corresponding pixel in the target patch
+    const x = dx + radius; // x-coordinate within the radius of the patch
+    const y = dy + radius; // y-coordinate within the radius of the patch
+
+    // Calculate the index in the targetData array
+    const index = (y * (radius * 2) + x) * 4;
+
+    // Ensure the calculated index is within bounds
+    if (index >= 0 && index < targetData.length) {
+        return index;
+    } else {
+        return -1; // Return -1 if index is out of bounds (though ideally, it should not happen with correct calculations)
     }
 }
 
