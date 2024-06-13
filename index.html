@@ -103,48 +103,65 @@ inpaintSpot(x, y);
 
 function inpaintSpot(x, y) {
 const radius = cursorSize / 2;
-                const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-                const data = imageData.data;
-                const copyData = new Uint8ClampedArray(data);
+const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+  const data = imageData.data;
+                const originalPixels = originalData.data;
 
-                // Average the surrounding pixels for the inpainting area
+                // Convert to grayscale to simplify gradient calculations
+                const grayscale = [];
                 for (let i = 0; i < data.length; i += 4) {
-                    const r = data[i];
-                    const g = data[i + 1];
-                    const b = data[i + 2];
-                    const a = data[i + 3];
+                    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                    grayscale.push(gray);
+                }
 
-                    // Calculate average color of surrounding pixels
-                    const avg = getSurroundingAverage(i, copyData, radius, radius, imageData.width, imageData.height);
-                    data[i] = avg[0];
-                    data[i + 1] = avg[1];
-                    data[i + 2] = avg[2];
-                    data[i + 3] = a; // Maintain original alpha
+                // Calculate gradients
+                const gradients = calculateGradients(grayscale, radius * 2, radius * 2);
+
+                // Apply gradients to the target area
+                for (let i = 0; i < data.length; i += 4) {
+                    const xIndex = (i / 4) % (radius * 2);
+                    const yIndex = Math.floor((i / 4) / (radius * 2));
+                    const gradientIndex = yIndex * (radius * 2) + xIndex;
+
+                    const r = originalPixels[i];
+                    const g = originalPixels[i + 1];
+                    const b = originalPixels[i + 2];
+
+                    const blended = blendWithGradient(r, g, b, gradients[gradientIndex], blendingIntensity);
+
+                    data[i] = blended[0];
+                    data[i + 1] = blended[1];
+                    data[i + 2] = blended[2];
+                    data[i + 3] = originalPixels[i + 3];
                 }
 
                 context.putImageData(imageData, x - radius, y - radius);
             }
 
-            function getSurroundingAverage(index, data, width, height, imgWidth, imgHeight) {
-                const x = (index / 4) % width;
-                const y = Math.floor((index / 4) / width);
-                let rTotal = 0, gTotal = 0, bTotal = 0, count = 0;
+            function calculateGradients(grayscale, width, height) {
+                const gradients = new Array(grayscale.length).fill(0);
 
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        const nx = x + dx;
-                        const ny = y + dy;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                            const nIndex = ((ny * width) + nx) * 4;
-                            rTotal += data[nIndex];
-                            gTotal += data[nIndex + 1];
-                            bTotal += data[nIndex + 2];
-                            count++;
-                        }
+                for (let y = 1; y < height - 1; y++) {
+                    for (let x = 1; x < width - 1; x++) {
+                        const i = y * width + x;
+
+                        const gx = grayscale[i + 1] - grayscale[i - 1];
+                        const gy = grayscale[i + width] - grayscale[i - width];
+
+                        gradients[i] = Math.sqrt(gx * gx + gy * gy);
                     }
                 }
 
-                return [rTotal / count, gTotal / count, bTotal / count];
+                return gradients;
+            }
+
+            function blendWithGradient(r, g, b, gradient, intensity) {
+                const factor = intensity * gradient / 255;
+                const blendedR = r * (1 - factor) + gradient * factor;
+                const blendedG = g * (1 - factor) + gradient * factor;
+                const blendedB = b * (1 - factor) + gradient * factor;
+
+                return [blendedR, blendedG, blendedB];
             }
         });
     </script>
