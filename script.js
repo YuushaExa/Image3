@@ -1,4 +1,4 @@
-    document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', () => {
             const upload = document.getElementById('upload');
             const healToolButton = document.getElementById('healToolButton');
             const cursorSizeInput = document.getElementById('cursorSize');
@@ -10,6 +10,13 @@
             let usingHealTool = false;
             let cursorSize = parseInt(cursorSizeInput.value, 10);
             let canvasData = null;
+            let model = null;
+
+            async function loadModel() {
+                model = await tf.loadGraphModel('path/to/your/model.json'); // Use a pre-trained inpainting model
+            }
+
+            loadModel();
 
             upload.addEventListener('change', handleImageUpload);
             healToolButton.addEventListener('click', () => {
@@ -61,78 +68,18 @@
                 }
             }
 
-            function inpaintSpot(x, y) {
+            async function inpaintSpot(x, y) {
+                if (!model) {
+                    alert("Model not loaded yet. Please wait.");
+                    return;
+                }
+
                 const radius = cursorSize / 2;
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-                const data = imageData.data;
+                const tensor = tf.browser.fromPixels(imageData).toFloat().div(tf.scalar(255.0)).expandDims();
+                const result = await model.predict(tensor).squeeze().mul(tf.scalar(255.0)).clipByValue(0, 255).toInt();
 
-                const patchSize = radius * 2;
-                const similarPatch = findBestPatch(x, y, patchSize);
-                if (similarPatch) {
-                    inpaintPatch(data, similarPatch.data, radius);
-                    context.putImageData(imageData, x - radius, y - radius);
-                }
-            }
-
-            function findBestPatch(x, y, size) {
-                const searchRadius = 30;
-                let bestPatch = null;
-                let bestScore = Infinity;
-
-                for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-                    for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-                        const patchData = extractPatchData(x + dx, y + dy, size);
-                        const score = computePatchScore(patchData);
-                        if (score < bestScore) {
-                            bestScore = score;
-                            bestPatch = { x: x + dx, y: y + dy, data: patchData };
-                        }
-                    }
-                }
-
-                return bestPatch;
-            }
-
-            function extractPatchData(x, y, size) {
-                const startX = Math.max(0, x);
-                const startY = Math.max(0, y);
-                const endX = Math.min(canvas.width, x + size);
-                const endY = Math.min(canvas.height, y + size);
-                return context.getImageData(startX, startY, endX - startX, endY - startY).data;
-            }
-
-            function computePatchScore(data) {
-                let r = 0, g = 0, b = 0, count = data.length / 4;
-                for (let i = 0; i < data.length; i += 4) {
-                    r += data[i];
-                    g += data[i + 1];
-                    b += data[i + 2];
-                }
-                r /= count;
-                g /= count;
-                b /= count;
-
-                let score = 0;
-                for (let i = 0; i < data.length; i += 4) {
-                    score += Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b);
-                }
-
-                return score;
-            }
-
-            function inpaintPatch(sourceData, targetData, radius) {
-                const length = sourceData.length;
-
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < radius) {
-                        sourceData[i] = (sourceData[i] + targetData[i]) / 2;
-                        sourceData[i + 1] = (sourceData[i + 1] + targetData[i + 1]) / 2;
-                        sourceData[i + 2] = (sourceData[i + 2] + targetData[i + 2]) / 2;
-                    }
-                }
+                const outputData = new ImageData(new Uint8ClampedArray(await result.data()), radius * 2, radius * 2);
+                context.putImageData(outputData, x - radius, y - radius);
             }
         });
