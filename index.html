@@ -112,6 +112,7 @@
 
                     contentAwareFill(data, similarPatch, radius);
                     context.putImageData(imageData, x - radius, y - radius);
+                    context.drawImage(image, 0, 0);
                 }
             }
 
@@ -156,30 +157,32 @@
                 return score;
             }
 
-            function contentAwareFill(sourceData, targetData, radius) {
-                const length = sourceData.length;
-                const sigma = radius / 3;
-                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+function contentAwareFill(sourceData, targetData, radius) {
+    const length = sourceData.length;
+    const sigma = radius / 3;
+    const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
 
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+    for (let i = 0; i < length; i += 4) {
+        const dx = (i / 4) % (radius * 2) - radius;
+        const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < radius) {
-                        const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
-                        if (targetIndex !== -1) {
-                            const weight = gauss(dist);
-                            const sourceWeight = weight;
-                            const targetWeight = 1 - weight;
+        if (dist < radius) {
+            const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
+            if (targetIndex !== -1) {
+                const sourceWeight = gauss(dist);
+                const targetWeight = 1 - sourceWeight;
 
-                            sourceData[i] = sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex];
-                            sourceData[i + 1] = sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1];
-                            sourceData[i + 2] = sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2];
-                        }
-                    }
-                }
+                sourceData[i] = Math.floor(sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex]);
+                sourceData[i + 1] = Math.floor(sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1]);
+                sourceData[i + 2] = Math.floor(sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2]);
+                // Preserve alpha channel
+                sourceData[i + 3] = sourceData[i + 3]; // No change to alpha channel
             }
+        }
+    }
+}
+
         });
     </script>
 </body>
