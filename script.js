@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function healSpot(x, y) {
-        const radius = 20;
+        const radius = 200;
         const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
         const data = imageData.data;
         const length = data.length;
