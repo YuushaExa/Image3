@@ -5,68 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Healing Spot Tool</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
-        }
         #canvas {
-            border: 1px solid #ccc;
+            border: 1px solid black;
             cursor: none;
         }
         .cursor {
             position: absolute;
             border-radius: 50%;
-            border: 2px solid rgba(255, 0, 0, 0.7);
+            border: 2px solid red;
             pointer-events: none;
             display: none;
-            z-index: 100;
-        }
-        #controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            z-index: 50;
-        }
-        .control-label {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .control {
-            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
-    <div id="controls">
-        <label for="cursorSize" class="control-label">Cursor Size:</label>
-        <input type="range" id="cursorSize" class="control" min="5" max="100" value="20">
-        <label for="blendingIntensity" class="control-label">Blending Intensity:</label>
-        <input type="range" id="blendingIntensity" class="control" min="0.1" max="2" step="0.1" value="1">
-        <button id="healToolButton">Activate Healing Tool</button>
-    </div>
+    <input type="file" id="upload" accept="image/*">
+    <button id="healToolButton">Healing Spot Tool</button>
+    <label for="cursorSize">Cursor Size:</label>
+    <input type="range" id="cursorSize" min="5" max="100" value="20">
+    <label for="blendingIntensity">Blending Intensity:</label>
+    <input type="range" id="blendingIntensity" min="0.1" max="2" step="0.1" value="1">
     <canvas id="canvas"></canvas>
-    <canvas id="canvasPreview" style="display: none;"></canvas>
     <div id="cursor" class="cursor"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            const canvasPreview = document.getElementById('canvasPreview').getContext('2d');
-            const cursor = document.getElementById('cursor');
+            const upload = document.getElementById('upload');
+            const healToolButton = document.getElementById('healToolButton');
             const cursorSizeInput = document.getElementById('cursorSize');
             const blendingIntensityInput = document.getElementById('blendingIntensity');
-            const healToolButton = document.getElementById('healToolButton');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            const cursor = document.getElementById('cursor');
             
             let image = new Image();
             let usingHealTool = false;
@@ -74,11 +44,23 @@
             let blendingIntensity = parseFloat(blendingIntensityInput.value);
             let canvasData = null;
 
-            let lastMouseMoveTime = 0;
-            const debounceTime = 50; // Adjust debounce time as needed
+            upload.addEventListener('change', handleImageUpload);
+            healToolButton.addEventListener('click', () => {
+                usingHealTool = !usingHealTool;
+                cursor.style.display = usingHealTool ? 'block' : 'none';
+            });
 
-            // Load image from user input
-            document.getElementById('upload').addEventListener('change', handleImageUpload);
+            cursorSizeInput.addEventListener('input', () => {
+                cursorSize = parseInt(cursorSizeInput.value, 10);
+                cursor.style.width = cursor.style.height = `${cursorSize}px`;
+            });
+
+            blendingIntensityInput.addEventListener('input', () => {
+                blendingIntensity = parseFloat(blendingIntensityInput.value);
+            });
+
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('click', handleCanvasClick);
 
             function handleImageUpload(event) {
                 const file = event.target.files[0];
@@ -97,58 +79,107 @@
                 }
             }
 
-            // Activate/deactivate healing tool
-            healToolButton.addEventListener('click', () => {
-                usingHealTool = !usingHealTool;
-                healToolButton.textContent = usingHealTool ? 'Deactivate Healing Tool' : 'Activate Healing Tool';
-            });
-
-            // Adjust cursor size
-            cursorSizeInput.addEventListener('input', () => {
-                cursorSize = parseInt(cursorSizeInput.value, 10);
-                cursor.style.width = cursor.style.height = `${cursorSize}px`;
-            });
-
-            // Adjust blending intensity
-            blendingIntensityInput.addEventListener('input', () => {
-                blendingIntensity = parseFloat(blendingIntensityInput.value);
-            });
-
-            // Handle mouse movement for the healing tool
-            canvas.addEventListener('mousemove', (event) => {
-                const currentTime = new Date().getTime();
-                if (currentTime - lastMouseMoveTime > debounceTime) {
-                    handleMouseMove(event);
-                    lastMouseMoveTime = currentTime;
-                }
-            });
-
             function handleMouseMove(event) {
                 if (usingHealTool) {
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
-
                     cursor.style.left = `${event.clientX - cursorSize / 2}px`;
                     cursor.style.top = `${event.clientY - cursorSize / 2}px`;
-                    cursor.style.display = 'block';
-
-                    showPreview(x, y);
                 }
             }
 
-            function showPreview(x, y) {
-                const radius = cursorSize / 2;
-                const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-                canvasPreview.canvas.width = imageData.width;
-                canvasPreview.canvas.height = imageData.height;
-                canvasPreview.putImageData(imageData, 0, 0);
-
-                // Optionally, apply blending or other effects for real-time preview
-                // Example: context.drawImage(canvasPreview.canvas, x - radius, y - radius);
+            function handleCanvasClick(event) {
+                if (usingHealTool) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    inpaintSpot(x, y);
+                }
             }
 
-            // Additional functionality like inpainting, blending, etc., can be added as needed.
+            function inpaintSpot(x, y) {
+                const radius = cursorSize / 2;
+
+                // Extract the patch to be replaced
+                const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+                const data = imageData.data;
+
+                // Find the best matching patch from the image
+                const similarPatchIndex = findCorrespondingPixel(x, y, data, radius);
+                if (similarPatchIndex !== -1) {
+                    // Blend the patches using advanced blending techniques
+                    contentAwareFill(data, data.slice(similarPatchIndex, similarPatchIndex + radius * radius * 4), radius);
+                    context.putImageData(imageData, x - radius, y - radius);
+                }
+            }
+
+            function findCorrespondingPixel(dx, dy, targetData, radius) {
+                const patchSize = radius * 2;
+                let bestMatchIndex = -1;
+                let lowestScore = Infinity;
+
+                for (let offsetX = -radius; offsetX <= radius; offsetX++) {
+                    for (let offsetY = -radius; offsetY <= radius; offsetY++) {
+                        const targetX = dx + offsetX;
+                        const targetY = dy + offsetY;
+                        if (targetX < 0 || targetY < 0 || targetX >= canvas.width || targetY >= canvas.height) {
+                            continue;
+                        }
+
+                        const targetIndex = (targetY * canvas.width + targetX) * 4;
+                        const score = computePatchScore(targetData, targetIndex, patchSize);
+
+                        if (score < lowestScore) {
+                            lowestScore = score;
+                            bestMatchIndex = targetIndex;
+                        }
+                    }
+                }
+
+                return bestMatchIndex;
+            }
+
+            function computePatchScore(data, index, patchSize) {
+                let score = 0;
+                for (let i = 0; i < patchSize; i++) {
+                    for (let j = 0; j < patchSize; j++) {
+                        const offset = (j * patchSize + i) * 4;
+                        const r = data[index + offset];
+                        const g = data[index + offset + 1];
+                        const b = data[index + offset + 2];
+
+                        score += r * r + g * g + b * b;
+                    }
+                }
+                return score;
+            }
+
+            function contentAwareFill(sourceData, targetData, radius) {
+                const length = sourceData.length;
+                const sigma = radius / 3;
+                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+
+                for (let i = 0; i < length; i += 4) {
+                    const dx = (i / 4) % (radius * 2) - radius;
+                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < radius) {
+                        const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
+                        if (targetIndex !== -1) {
+                            // Blend using advanced blending techniques (e.g., Poisson blending, etc.)
+                            const weight = gauss(dist);
+                            const sourceWeight = weight;
+                            const targetWeight = 1 - weight;
+
+                            sourceData[i] = sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex];
+                            sourceData[i + 1] = sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1];
+                            sourceData[i + 2] = sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2];
+                        }
+                    }
+                }
+            }
         });
     </script>
 </body>
