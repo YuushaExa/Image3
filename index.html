@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Healing Spot Tool with Poisson Editing</title>
+<title>Healing Spot Tool with Gradient-Based Blending</title>
 <style>
 #canvas {
 border: 1px solid black;
@@ -104,6 +104,7 @@ inpaintSpot(x, y);
 function inpaintSpot(x, y) {
 const radius = cursorSize / 2;
 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+const originalData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
   const data = imageData.data;
                 const originalPixels = originalData.data;
 
