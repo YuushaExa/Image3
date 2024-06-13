@@ -95,8 +95,6 @@
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
                     inpaintSpot(x, y);
-                    // Redraw the entire image on the canvas after inpainting
-                    context.drawImage(image, 0, 0);
                 }
             }
 
@@ -108,7 +106,7 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    contentAwareFill(data, similarPatch.data, radius);
+                    blendPatches(data, similarPatch.data, radius, blendingIntensity);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -163,7 +161,7 @@
                 return score;
             }
 
-            function contentAwareFill(sourceData, targetData, radius) {
+            function blendPatches(sourceData, targetData, radius, intensity) {
                 const length = sourceData.length;
                 const sigma = radius / 3;
                 const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
@@ -174,37 +172,13 @@
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist < radius) {
-                        const targetIndex = findCorrespondingPixel(dx, dy, targetData, radius);
-                        if (targetIndex !== -1) {
-                            const sourceWeight = gauss(dist);
-                            const targetWeight = 1 - sourceWeight;
-
-                            sourceData[i] = Math.floor(sourceWeight * sourceData[i] + targetWeight * targetData[targetIndex]);
-                            sourceData[i + 1] = Math.floor(sourceWeight * sourceData[i + 1] + targetWeight * targetData[targetIndex + 1]);
-                            sourceData[i + 2] = Math.floor(sourceWeight * sourceData[i + 2] + targetWeight * targetData[targetIndex + 2]);
-                            // Preserve alpha channel
-                            sourceData[i + 3] = sourceData[i + 3]; // No change to alpha channel
-                        }
+                        const weight = gauss(dist) * intensity;
+                        sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
+                        sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
+                        sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
                     }
                 }
             }
-
-       function findCorrespondingPixel(dx, dy, targetData, radius) {
-    // Calculate the coordinates of the corresponding pixel in the target patch
-    const x = dx + radius; // x-coordinate within the radius of the patch
-    const y = dy + radius; // y-coordinate within the radius of the patch
-
-    // Calculate the index in the targetData array
-    const index = (y * (radius * 2) + x) * 4;
-
-    // Ensure the calculated index is within bounds
-    if (index >= 0 && index < targetData.length) {
-        return index;
-    } else {
-        return -1; // Return -1 if index is out of bounds (though ideally, it should not happen with correct calculations)
-    }
-}
-
         });
     </script>
 </body>
