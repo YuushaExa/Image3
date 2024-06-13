@@ -36,22 +36,31 @@ document.addEventListener("DOMContentLoaded", () => {
         const y = event.clientY - rect.top;
         const radius = 15;
 
-        // Get the selected area
-        let src = cv.imread(canvas);
-        let mask = new cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
-        cv.circle(mask, new cv.Point(x, y), radius, new cv.Scalar(255, 255, 255), -1);
+        try {
+            // Check if OpenCV.js is fully loaded
+            if (!cv || !cv.inpaint) {
+                throw new Error("OpenCV.js is not loaded or the inpaint function is not available.");
+            }
 
-        // Inpainting
-        let dst = new cv.Mat();
-        cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
+            // Get the selected area
+            let src = cv.imread(canvas);
+            let mask = new cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
+            cv.circle(mask, new cv.Point(x, y), radius, new cv.Scalar(255, 255, 255), -1);
 
-        // Update canvas
-        cv.imshow('imageCanvas', dst);
+            // Inpainting
+            let dst = new cv.Mat();
+            cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
 
-        // Clean up
-        src.delete();
-        mask.delete();
-        dst.delete();
+            // Update canvas
+            cv.imshow('imageCanvas', dst);
+
+            // Clean up
+            src.delete();
+            mask.delete();
+            dst.delete();
+        } catch (error) {
+            console.error("An error occurred during the inpainting process:", error);
+        }
     });
 
     // Custom cursor effect
@@ -74,4 +83,20 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.stroke();
     });
 });
- 
+
+// Load OpenCV.js dynamically
+function loadOpenCV() {
+    const script = document.createElement('script');
+    script.src = 'https://docs.opencv.org/5.x/opencv.js';
+    script.async = true;
+    script.onload = () => {
+        console.log('OpenCV.js loaded');
+    };
+    script.onerror = () => {
+        console.error('Failed to load OpenCV.js');
+    };
+    document.head.appendChild(script);
+}
+
+// Call the function to load OpenCV.js
+loadOpenCV();
