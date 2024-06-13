@@ -1,183 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Healing Spot Tool</title>
-    <style>
-        #canvas {
-            border: 1px solid black;
-            cursor: none;
-        }
-        .cursor {
-            position: absolute;
-            border-radius: 50%;
-            border: 2px solid red;
-            pointer-events: none;
-            display: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healing Spot Tool with Poisson Editing</title>
+<style>
+#canvas {
+border: 1px solid black;
+cursor: none;
+}
+.cursor {
+position: absolute;
+border-radius: 50%;
+border: 2px solid red;
+pointer-events: none;
+display: none;
+}
+</style>
 </head>
 <body>
-    <input type="file" id="upload" accept="image/*">
-    <button id="healToolButton">Healing Spot Tool</button>
-    <label for="cursorSize">Cursor Size:</label>
-    <input type="range" id="cursorSize" min="5" max="100" value="20">
-    <label for="blendingIntensity">Blending Intensity:</label>
-    <input type="range" id="blendingIntensity" min="0.1" max="2" step="0.1" value="1">
-    <canvas id="canvas"></canvas>
-    <div id="cursor" class="cursor"></div>
+<input type="file" id="upload" accept="image/*">
+<button id="healToolButton">Healing Spot Tool</button>
+<label for="cursorSize">Cursor Size:</label>
+<input type="range" id="cursorSize" min="5" max="100" value="20">
+<label for="blendingIntensity">Blending Intensity:</label>
+<input type="range" id="blendingIntensity" min="0.1" max="2" step="0.1" value="1">
+<canvas id="canvas"></canvas>
+<div id="cursor" class="cursor"></div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const upload = document.getElementById('upload');
-            const healToolButton = document.getElementById('healToolButton');
-            const cursorSizeInput = document.getElementById('cursorSize');
-            const blendingIntensityInput = document.getElementById('blendingIntensity');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            const cursor = document.getElementById('cursor');
-            
-            let image = new Image();
-            let usingHealTool = false;
-            let cursorSize = parseInt(cursorSizeInput.value, 10);
-            let blendingIntensity = parseFloat(blendingIntensityInput.value);
-            let canvasData = null;
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+const upload = document.getElementById('upload');
+const healToolButton = document.getElementById('healToolButton');
+const cursorSizeInput = document.getElementById('cursorSize');
+const blendingIntensityInput = document.getElementById('blendingIntensity');
+const canvas = document.getElementById('canvas');
+const context = canvas.getContext('2d');
+const cursor = document.getElementById('cursor');
 
-            upload.addEventListener('change', handleImageUpload);
-            healToolButton.addEventListener('click', () => {
-                usingHealTool = !usingHealTool;
-                cursor.style.display = usingHealTool ? 'block' : 'none';
-            });
+let image = new Image();
+let usingHealTool = false;
+let cursorSize = parseInt(cursorSizeInput.value, 10);
+let blendingIntensity = parseFloat(blendingIntensityInput.value);
+let canvasData = null;
 
-            cursorSizeInput.addEventListener('input', () => {
-                cursorSize = parseInt(cursorSizeInput.value, 10);
-                cursor.style.width = cursor.style.height = `${cursorSize}px`;
-            });
+upload.addEventListener('change', handleImageUpload);
+healToolButton.addEventListener('click', toggleHealTool);
+cursorSizeInput.addEventListener('input', updateCursorSize);
+blendingIntensityInput.addEventListener('input', updateBlendingIntensity);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('click', handleCanvasClick);
 
-            blendingIntensityInput.addEventListener('input', () => {
-                blendingIntensity = parseFloat(blendingIntensityInput.value);
-            });
+function handleImageUpload(event) {
+const file = event.target.files[0];
+if (file) {
+const reader = new FileReader();
+reader.onload = function (e) {
+image.onload = () => {
+canvas.width = image.width;
+canvas.height = image.height;
+context.drawImage(image, 0, 0);
+canvasData = context.getImageData(0, 0, canvas.width, canvas.height);
+};
+image.src = e.target.result;
+};
+reader.readAsDataURL(file);
+}
+}
 
-            canvas.addEventListener('mousemove', handleMouseMove);
-            canvas.addEventListener('click', handleCanvasClick);
+function toggleHealTool() {
+usingHealTool = !usingHealTool;
+cursor.style.display = usingHealTool ? 'block' : 'none';
+}
 
-            function handleImageUpload(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function (e) {
-                        image.onload = function () {
-                            canvas.width = image.width;
-                            canvas.height = image.height;
-                            context.drawImage(image, 0, 0);
-                            canvasData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        }
-                        image.src = e.target.result;
-                    }
-                    reader.readAsDataURL(file);
-                }
-            }
+function updateCursorSize() {
+cursorSize = parseInt(cursorSizeInput.value, 10);
+cursor.style.width = cursor.style.height = `${cursorSize}px`;
+}
 
-            function handleMouseMove(event) {
-                if (usingHealTool) {
-                    const rect = canvas.getBoundingClientRect();
-                    const x = event.clientX - rect.left;
-                    const y = event.clientY - rect.top;
-                    cursor.style.left = `${event.clientX - cursorSize / 2}px`;
-                    cursor.style.top = `${event.clientY - cursorSize / 2}px`;
-                }
-            }
+function updateBlendingIntensity() {
+blendingIntensity = parseFloat(blendingIntensityInput.value);
+}
 
-            function handleCanvasClick(event) {
-                if (usingHealTool) {
-                    const rect = canvas.getBoundingClientRect();
-                    const x = event.clientX - rect.left;
-                    const y = event.clientY - rect.top;
-                    inpaintSpot(x, y);
-                }
-            }
+function handleMouseMove(event) {
+if (usingHealTool) {
+const rect = canvas.getBoundingClientRect();
+const x = event.clientX - rect.left;
+const y = event.clientY - rect.top;
+cursor.style.left = `${event.clientX - cursorSize / 2}px`;
+cursor.style.top = `${event.clientY - cursorSize / 2}px`;
+}
+}
 
-            function inpaintSpot(x, y) {
-                const radius = cursorSize / 2;
+function handleCanvasClick(event) {
+if (usingHealTool) {
+const rect = canvas.getBoundingClientRect();
+const x = event.clientX - rect.left;
+const y = event.clientY - rect.top;
+inpaintSpot(x, y);
+}
+}
+
+function inpaintSpot(x, y) {
+const radius = cursorSize / 2;
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
                 const data = imageData.data;
+                const copyData = new Uint8ClampedArray(data);
 
-                const patchSize = radius * 2;
-                const similarPatch = findBestPatch(x, y, patchSize);
-                if (similarPatch) {
-                    blendPatches(data, similarPatch.data, radius, blendingIntensity);
-                    context.putImageData(imageData, x - radius, y - radius);
+                // Average the surrounding pixels for the inpainting area
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    const a = data[i + 3];
+
+                    // Calculate average color of surrounding pixels
+                    const avg = getSurroundingAverage(i, copyData, radius, radius, imageData.width, imageData.height);
+                    data[i] = avg[0];
+                    data[i + 1] = avg[1];
+                    data[i + 2] = avg[2];
+                    data[i + 3] = a; // Maintain original alpha
                 }
+
+                context.putImageData(imageData, x - radius, y - radius);
             }
 
-            function findBestPatch(x, y, size) {
-                const searchRadius = 30;
-                let bestPatch = null;
-                let bestScore = Infinity;
+            function getSurroundingAverage(index, data, width, height, imgWidth, imgHeight) {
+                const x = (index / 4) % width;
+                const y = Math.floor((index / 4) / width);
+                let rTotal = 0, gTotal = 0, bTotal = 0, count = 0;
 
-                for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-                    for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-                        if (x + dx < 0 || y + dy < 0 || x + dx + size >= canvas.width || y + dy + size >= canvas.height) {
-                            continue;
-                        }
-
-                        const patchData = extractPatchData(x + dx, y + dy, size);
-                        const score = computePatchScore(patchData);
-                        if (score < bestScore) {
-                            bestScore = score;
-                            bestPatch = { x: x + dx, y: y + dy, data: patchData };
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            const nIndex = ((ny * width) + nx) * 4;
+                            rTotal += data[nIndex];
+                            gTotal += data[nIndex + 1];
+                            bTotal += data[nIndex + 2];
+                            count++;
                         }
                     }
                 }
 
-                return bestPatch;
-            }
-
-            function extractPatchData(x, y, size) {
-                const startX = Math.max(0, x);
-                const startY = Math.max(0, y);
-                const endX = Math.min(canvas.width, x + size);
-                const endY = Math.min(canvas.height, y + size);
-                return context.getImageData(startX, startY, endX - startX, endY - startY).data;
-            }
-
-            function computePatchScore(data) {
-                let r = 0, g = 0, b = 0, count = data.length / 4;
-                for (let i = 0; i < data.length; i += 4) {
-                    r += data[i];
-                    g += data[i + 1];
-                    b += data[i + 2];
-                }
-                r /= count;
-                g /= count;
-                b /= count;
-
-                let score = 0;
-                for (let i = 0; i < data.length; i += 4) {
-                    score += Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b);
-                }
-
-                return score;
-            }
-
-            function blendPatches(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const sigma = radius / 3;
-                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
-
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < radius) {
-                        const weight = gauss(dist) * intensity;
-                        sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
-                        sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
-                        sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
-                    }
-                }
+                return [rTotal / count, gTotal / count, bTotal / count];
             }
         });
     </script>
