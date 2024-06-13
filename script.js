@@ -62,11 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function healSpot(x, y) {
         const radius = cursorSize / 2;
         const targetArea = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-
         const bestPatch = findBestPatch(targetArea, x, y, radius);
         if (bestPatch) {
             context.putImageData(bestPatch, x - radius, y - radius);
-            // Blend edges
             blendEdges(x, y, radius);
         }
     }
