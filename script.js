@@ -1,4 +1,4 @@
-        document.addEventListener('DOMContentLoaded', () => {
+     document.addEventListener('DOMContentLoaded', () => {
             const upload = document.getElementById('upload');
             const healToolButton = document.getElementById('healToolButton');
             const cursorSizeInput = document.getElementById('cursorSize');
@@ -9,6 +9,7 @@
             let image = new Image();
             let usingHealTool = false;
             let cursorSize = parseInt(cursorSizeInput.value, 10);
+            let canvasData = null;
 
             upload.addEventListener('change', handleImageUpload);
             healToolButton.addEventListener('click', () => {
@@ -33,6 +34,7 @@
                             canvas.width = image.width;
                             canvas.height = image.height;
                             context.drawImage(image, 0, 0);
+                            canvasData = context.getImageData(0, 0, canvas.width, canvas.height);
                         }
                         image.src = e.target.result;
                     }
@@ -61,54 +63,63 @@
 
             function healSpot(x, y) {
                 const radius = cursorSize / 2;
-                const sourcePatch = extractPatch(x, y, radius);
+                const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+                const data = imageData.data;
 
-                const bestMatch = findBestMatch(sourcePatch, x, y, radius);
-                if (bestMatch) {
-                    blendPatches(sourcePatch, bestMatch, x - radius, y - radius, radius);
+                const similarPatch = findSimilarPatch(x, y, radius * 2);
+                if (similarPatch) {
+                    blendPatches(data, similarPatch.data, radius);
+                    context.putImageData(imageData, x - radius, y - radius);
                 }
             }
 
-            function extractPatch(x, y, radius) {
-                return context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-            }
-
-            function findBestMatch(sourcePatch, x, y, radius) {
+            function findSimilarPatch(x, y, size) {
                 const searchRadius = 30;
-                let bestMatch = null;
+                let bestPatch = null;
                 let bestScore = Infinity;
 
                 for (let dx = -searchRadius; dx <= searchRadius; dx++) {
                     for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-                        const targetPatch = extractPatch(x + dx, y + dy, radius);
-                        const score = computePatchScore(sourcePatch, targetPatch);
+                        const patchData = extractPatchData(x + dx, y + dy, size);
+                        const score = computePatchScore(patchData);
                         if (score < bestScore) {
                             bestScore = score;
-                            bestMatch = targetPatch;
+                            bestPatch = { x: x + dx, y: y + dy, data: patchData };
                         }
                     }
                 }
 
-                return bestMatch;
+                return bestPatch;
             }
 
-            function computePatchScore(sourcePatch, targetPatch) {
-                const sourceData = sourcePatch.data;
-                const targetData = targetPatch.data;
-                let score = 0;
+            function extractPatchData(x, y, size) {
+                const startX = Math.max(0, x);
+                const startY = Math.max(0, y);
+                const endX = Math.min(canvas.width, x + size);
+                const endY = Math.min(canvas.height, y + size);
+                return context.getImageData(startX, startY, endX - startX, endY - startY).data;
+            }
 
-                for (let i = 0; i < sourceData.length; i += 4) {
-                    score += Math.abs(sourceData[i] - targetData[i])
-                          + Math.abs(sourceData[i + 1] - targetData[i + 1])
-                          + Math.abs(sourceData[i + 2] - targetData[i + 2]);
+            function computePatchScore(data) {
+                let r = 0, g = 0, b = 0, count = data.length / 4;
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i];
+                    g += data[i + 1];
+                    b += data[i + 2];
+                }
+                r /= count;
+                g /= count;
+                b /= count;
+
+                let score = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    score += Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b);
                 }
 
                 return score;
             }
 
-            function blendPatches(sourcePatch, targetPatch, x, y, radius) {
-                const sourceData = sourcePatch.data;
-                const targetData = targetPatch.data;
+            function blendPatches(sourceData, targetData, radius) {
                 const length = sourceData.length;
 
                 for (let i = 0; i < length; i += 4) {
@@ -122,7 +133,5 @@
                         sourceData[i + 2] = (sourceData[i + 2] + targetData[i + 2]) / 2;
                     }
                 }
-
-                context.putImageData(sourcePatch, x, y);
             }
         });
