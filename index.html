@@ -3,23 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Healing Spot Tool with OpenCV.js</title>
+    <title>Healing Spot Tool</title>
     <style>
-        canvas {
+        #canvas {
             border: 1px solid black;
+            cursor: none;
         }
-        .hidden {
+        .cursor {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid red;
+            pointer-events: none;
             display: none;
         }
     </style>
 </head>
 <body>
-    <input type="file" id="imageInput" accept="image/*">
-    <button id="healingToolBtn">Healing Spot Tool</button>
-    <canvas id="imageCanvas"></canvas>
+    <input type="file" id="upload" accept="image/*">
+    <button id="healToolButton">Healing Spot Tool</button>
+    <canvas id="canvas"></canvas>
+    <div id="cursor" class="cursor"></div>
 
-    <script async src="https://docs.opencv.org/5.x/opencv.js"></script>
-    <script src="healingSpotTool.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
- 
