@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const upload = document.getElementById('upload');
+    const uploadInput = document.getElementById('upload');
     const healToolButton = document.getElementById('healToolButton');
     const cursorSizeInput = document.getElementById('cursorSize');
     const canvas = document.getElementById('canvas');
@@ -10,41 +10,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let usingHealTool = false;
     let cursorSize = parseInt(cursorSizeInput.value, 10);
 
-    upload.addEventListener('change', handleImageUpload);
-    healToolButton.addEventListener('click', () => {
-        usingHealTool = !usingHealTool;
-        cursor.style.display = usingHealTool ? 'block' : 'none';
-    });
-
-    cursorSizeInput.addEventListener('input', () => {
-        cursorSize = parseInt(cursorSizeInput.value, 10);
-        cursor.style.width = cursor.style.height = `${cursorSize}px`;
-    });
-
-    canvas.addEventListener('mousemove', handleMouseMove);
+    uploadInput.addEventListener('change', handleImageUpload);
+    healToolButton.addEventListener('click', toggleHealingTool);
+    cursorSizeInput.addEventListener('input', updateCursorSize);
+    canvas.addEventListener('mousemove', updateCursorPosition);
     canvas.addEventListener('click', handleCanvasClick);
 
     function handleImageUpload(event) {
         const file = event.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = function (e) {
-                image.onload = function () {
+            reader.onload = (e) => {
+                image.onload = () => {
                     canvas.width = image.width;
                     canvas.height = image.height;
                     context.drawImage(image, 0, 0);
-                }
+                };
                 image.src = e.target.result;
-            }
+            };
             reader.readAsDataURL(file);
         }
     }
 
-    function handleMouseMove(event) {
+    function toggleHealingTool() {
+        usingHealTool = !usingHealTool;
+        cursor.style.display = usingHealTool ? 'block' : 'none';
+    }
+
+    function updateCursorSize() {
+        cursorSize = parseInt(cursorSizeInput.value, 10);
+        cursor.style.width = cursor.style.height = `${cursorSize}px`;
+    }
+
+    function updateCursorPosition(event) {
         if (usingHealTool) {
             const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
             cursor.style.left = `${event.clientX - cursorSize / 2}px`;
             cursor.style.top = `${event.clientY - cursorSize / 2}px`;
         }
@@ -63,8 +63,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const radius = cursorSize / 2;
         const targetArea = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
 
+        if (targetArea.width === 0 || targetArea.height === 0) {
+            console.error('Selected area is out of canvas bounds');
+            return;
+        }
+
         const bestPatch = findBestPatch(targetArea, x, y, radius);
-        context.putImageData(bestPatch, x - radius, y - radius);
+        if (bestPatch) {
+            context.putImageData(bestPatch, x - radius, y - radius);
+        } else {
+            console.error('No valid patch found');
+        }
     }
 
     function findBestPatch(targetArea, centerX, centerY, radius) {
@@ -77,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const patchX = centerX + dx - radius;
                 const patchY = centerY + dy - radius;
 
-                if (patchX < 0 || patchY < 0 || patchX + radius * 2 >= canvas.width || patchY + radius * 2 >= canvas.height) {
+                if (patchX < 0 || patchY < 0 || patchX + radius * 2 > canvas.width || patchY + radius * 2 > canvas.height) {
                     continue;
                 }
 
