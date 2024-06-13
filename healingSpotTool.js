@@ -84,19 +84,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// Load OpenCV.js dynamically
-function loadOpenCV() {
-    const script = document.createElement('script');
-    script.src = 'https://docs.opencv.org/5.x/opencv.js';
-    script.async = true;
-    script.onload = () => {
-        console.log('OpenCV.js loaded');
-    };
-    script.onerror = () => {
-        console.error('Failed to load OpenCV.js');
-    };
-    document.head.appendChild(script);
-}
 
-// Call the function to load OpenCV.js
-loadOpenCV();
