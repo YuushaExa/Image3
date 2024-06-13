@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function healSpot(x, y) {
         const radius = cursorSize / 2;
-        const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+        const imageData = context.getImageData(Math.max(0, x - radius), Math.max(0, y - radius), Math.min(radius * 2, canvas.width - x + radius), Math.min(radius * 2, canvas.height - y + radius));
         const data = imageData.data;
         const length = data.length;
 
@@ -110,11 +110,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         const offsetY = dy + ky;
                         if (offsetX >= -radius && offsetX <= radius && offsetY >= -radius && offsetY <= radius) {
                             const index = 4 * ((offsetY + radius) * (radius * 2) + (offsetX + radius));
-                            red += data[index] * kernelValue;
-                            green += data[index + 1] * kernelValue;
-                            blue += data[index + 2] * kernelValue;
-                            alpha += data[index + 3] * kernelValue;
-                            kernelSum += kernelValue;
+                            if (index >= 0 && index < data.length) {
+                                red += data[index] * kernelValue;
+                                green += data[index + 1] * kernelValue;
+                                blue += data[index + 2] * kernelValue;
+                                alpha += data[index + 3] * kernelValue;
+                                kernelSum += kernelValue;
+                            }
                         }
                     }
                 }
@@ -126,6 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        context.putImageData(imageData, x - radius, y - radius);
+        context.putImageData(imageData, Math.max(0, x - radius), Math.max(0, y - radius));
     }
 });
