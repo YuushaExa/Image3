@@ -1,4 +1,4 @@
-     document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
             const upload = document.getElementById('upload');
             const healToolButton = document.getElementById('healToolButton');
             const cursorSizeInput = document.getElementById('cursorSize');
@@ -57,23 +57,24 @@
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
-                    healSpot(x, y);
+                    inpaintSpot(x, y);
                 }
             }
 
-            function healSpot(x, y) {
+            function inpaintSpot(x, y) {
                 const radius = cursorSize / 2;
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
                 const data = imageData.data;
 
-                const similarPatch = findSimilarPatch(x, y, radius * 2);
+                const patchSize = radius * 2;
+                const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    blendPatches(data, similarPatch.data, radius);
+                    inpaintPatch(data, similarPatch.data, radius);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
 
-            function findSimilarPatch(x, y, size) {
+            function findBestPatch(x, y, size) {
                 const searchRadius = 30;
                 let bestPatch = null;
                 let bestScore = Infinity;
@@ -119,7 +120,7 @@
                 return score;
             }
 
-            function blendPatches(sourceData, targetData, radius) {
+            function inpaintPatch(sourceData, targetData, radius) {
                 const length = sourceData.length;
 
                 for (let i = 0; i < length; i += 4) {
