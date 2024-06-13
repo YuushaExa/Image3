@@ -65,27 +65,65 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = imageData.data;
         const length = data.length;
 
-        // Collect edge pixels for blending
+        const weights = [];
+        let weightSum = 0;
+
+        // Collect edge pixels for blending with weights based on distance from center
         let r = 0, g = 0, b = 0, count = 0;
         for (let i = 0; i < length; i += 4) {
             const dx = (i / 4) % (radius * 2) - radius;
             const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-            if (Math.sqrt(dx * dx + dy * dy) >= radius - 1) {
-                r += data[i];
-                g += data[i + 1];
-                b += data[i + 2];
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance >= radius - 1 && distance <= radius) {
+                const weight = 1 / distance; // Inverse distance weighting
+                weights.push({ index: i, weight: weight });
+                r += data[i] * weight;
+                g += data[i + 1] * weight;
+                b += data[i + 2] * weight;
+                weightSum += weight;
                 count++;
             }
         }
 
-        r = Math.floor(r / count);
-        g = Math.floor(g / count);
-        b = Math.floor(b / count);
+        r = Math.floor(r / weightSum);
+        g = Math.floor(g / weightSum);
+        b = Math.floor(b / weightSum);
+
+        // Gaussian blur kernel for smoothing
+        const kernel = [0.0625, 0.125, 0.0625, 0.125, 0.25, 0.125, 0.0625, 0.125, 0.0625];
+        const kernelSize = 3;
+        const halfKernel = Math.floor(kernelSize / 2);
 
         for (let i = 0; i < length; i += 4) {
-            data[i] = (data[i] + r) / 2;
-            data[i + 1] = (data[i + 1] + g) / 2;
-            data[i + 2] = (data[i + 2] + b) / 2;
+            const dx = (i / 4) % (radius * 2) - radius;
+            const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= radius) {
+                let red = 0, green = 0, blue = 0, alpha = 0, kernelSum = 0;
+
+                for (let ky = -halfKernel; ky <= halfKernel; ky++) {
+                    for (let kx = -halfKernel; kx <= halfKernel; kx++) {
+                        const kernelValue = kernel[(ky + halfKernel) * kernelSize + (kx + halfKernel)];
+                        const offsetX = dx + kx;
+                        const offsetY = dy + ky;
+                        if (offsetX >= -radius && offsetX <= radius && offsetY >= -radius && offsetY <= radius) {
+                            const index = 4 * ((offsetY + radius) * (radius * 2) + (offsetX + radius));
+                            red += data[index] * kernelValue;
+                            green += data[index + 1] * kernelValue;
+                            blue += data[index + 2] * kernelValue;
+                            alpha += data[index + 3] * kernelValue;
+                            kernelSum += kernelValue;
+                        }
+                    }
+                }
+
+                data[i] = (red / kernelSum + r) / 2;
+                data[i + 1] = (green / kernelSum + g) / 2;
+                data[i + 2] = (blue / kernelSum + b) / 2;
+                data[i + 3] = alpha / kernelSum;
+            }
         }
 
         context.putImageData(imageData, x - radius, y - radius);
