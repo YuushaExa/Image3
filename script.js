@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function healSpot(x, y) {
         const radius = cursorSize / 2;
-        const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
+        const imageData = context.getImageData(Math.max(0, x - radius), Math.max(0, y - radius), Math.min(radius * 2, canvas.width - x + radius), Math.min(radius * 2, canvas.height - y + radius));
         const data = imageData.data;
         const length = data.length;
 
@@ -88,27 +88,37 @@ document.addEventListener('DOMContentLoaded', () => {
             data[i] = blendedData[i];
         }
 
-        context.putImageData(imageData, x - radius, y - radius);
+        context.putImageData(imageData, Math.max(0, x - radius), Math.max(0, y - radius));
     }
 
     function blendPatches(patches, width, height) {
         const blendedData = new Uint8ClampedArray(width * height * 4);
         const patchCount = patches.length;
 
+        // Weights for blending, giving more importance to closer patches
+        const weights = patches.map((patch, index) => {
+            const dx = (index % 3) - 1; // Relative x-position in the 3x3 grid
+            const dy = Math.floor(index / 3) - 1; // Relative y-position in the 3x3 grid
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return 1 / (distance + 0.1); // Adding a small constant to avoid division by zero
+        });
+
+        const weightSum = weights.reduce((a, b) => a + b, 0);
+
         for (let i = 0; i < blendedData.length; i += 4) {
             let r = 0, g = 0, b = 0, a = 0;
 
             for (let j = 0; j < patchCount; j++) {
-                r += patches[j].data[i];
-                g += patches[j].data[i + 1];
-                b += patches[j].data[i + 2];
-                a += patches[j].data[i + 3];
+                r += patches[j].data[i] * weights[j];
+                g += patches[j].data[i + 1] * weights[j];
+                b += patches[j].data[i + 2] * weights[j];
+                a += patches[j].data[i + 3] * weights[j];
             }
 
-            blendedData[i] = r / patchCount;
-            blendedData[i + 1] = g / patchCount;
-            blendedData[i + 2] = b / patchCount;
-            blendedData[i + 3] = a / patchCount;
+            blendedData[i] = r / weightSum;
+            blendedData[i + 1] = g / weightSum;
+            blendedData[i + 2] = b / weightSum;
+            blendedData[i + 3] = a / weightSum;
         }
 
         return blendedData;
