@@ -1,17 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
     const upload = document.getElementById('upload');
     const healToolButton = document.getElementById('healToolButton');
+    const cursorSizeInput = document.getElementById('cursorSize');
     const canvas = document.getElementById('canvas');
     const context = canvas.getContext('2d');
     const cursor = document.getElementById('cursor');
     
     let image = new Image();
     let usingHealTool = false;
+    let cursorSize = parseInt(cursorSizeInput.value, 10);
 
     upload.addEventListener('change', handleImageUpload);
     healToolButton.addEventListener('click', () => {
         usingHealTool = !usingHealTool;
         cursor.style.display = usingHealTool ? 'block' : 'none';
+    });
+
+    cursorSizeInput.addEventListener('input', () => {
+        cursorSize = parseInt(cursorSizeInput.value, 10);
+        cursor.style.width = cursor.style.height = `${cursorSize}px`;
     });
 
     canvas.addEventListener('mousemove', handleMouseMove);
@@ -38,8 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const rect = canvas.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
-            cursor.style.left = `${event.clientX - cursor.offsetWidth / 2}px`;
-            cursor.style.top = `${event.clientY - cursor.offsetHeight / 2}px`;
+            cursor.style.left = `${event.clientX - cursorSize / 2}px`;
+            cursor.style.top = `${event.clientY - cursorSize / 2}px`;
         }
     }
 
@@ -53,18 +60,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function healSpot(x, y) {
-        const radius = 5;
+        const radius = cursorSize / 2;
         const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
         const data = imageData.data;
         const length = data.length;
 
-        // Very basic healing logic: average color
+        // Collect edge pixels for blending
         let r = 0, g = 0, b = 0, count = 0;
         for (let i = 0; i < length; i += 4) {
-            r += data[i];
-            g += data[i + 1];
-            b += data[i + 2];
-            count++;
+            const dx = (i / 4) % (radius * 2) - radius;
+            const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+            if (Math.sqrt(dx * dx + dy * dy) >= radius - 1) {
+                r += data[i];
+                g += data[i + 1];
+                b += data[i + 2];
+                count++;
+            }
         }
 
         r = Math.floor(r / count);
@@ -72,9 +83,9 @@ document.addEventListener('DOMContentLoaded', () => {
         b = Math.floor(b / count);
 
         for (let i = 0; i < length; i += 4) {
-            data[i] = r;
-            data[i + 1] = g;
-            data[i + 2] = b;
+            data[i] = (data[i] + r) / 2;
+            data[i + 1] = (data[i + 1] + g) / 2;
+            data[i + 2] = (data[i + 2] + b) / 2;
         }
 
         context.putImageData(imageData, x - radius, y - radius);
