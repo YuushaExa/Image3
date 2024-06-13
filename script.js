@@ -61,33 +61,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function healSpot(x, y) {
         const radius = cursorSize / 2;
-        const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-        const data = imageData.data;
-        const length = data.length;
+        const targetArea = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
 
-        // Collect edge pixels for blending
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let i = 0; i < length; i += 4) {
-            const dx = (i / 4) % (radius * 2) - radius;
-            const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-            if (Math.sqrt(dx * dx + dy * dy) >= radius - 1) {
-                r += data[i];
-                g += data[i + 1];
-                b += data[i + 2];
-                count++;
+        const bestPatch = findBestPatch(targetArea, x, y, radius);
+        context.putImageData(bestPatch, x - radius, y - radius);
+    }
+
+    function findBestPatch(targetArea, centerX, centerY, radius) {
+        const searchRadius = radius * 2;
+        let bestPatch = null;
+        let bestPatchError = Infinity;
+
+        for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+            for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+                const patchX = centerX + dx - radius;
+                const patchY = centerY + dy - radius;
+
+                if (patchX < 0 || patchY < 0 || patchX + radius * 2 >= canvas.width || patchY + radius * 2 >= canvas.height) {
+                    continue;
+                }
+
+                const patch = context.getImageData(patchX, patchY, radius * 2, radius * 2);
+                const patchError = calculatePatchError(targetArea, patch);
+
+                if (patchError < bestPatchError) {
+                    bestPatchError = patchError;
+                    bestPatch = patch;
+                }
             }
         }
 
-        r = Math.floor(r / count);
-        g = Math.floor(g / count);
-        b = Math.floor(b / count);
+        return bestPatch;
+    }
 
-        for (let i = 0; i < length; i += 4) {
-            data[i] = (data[i] + r) / 2;
-            data[i + 1] = (data[i + 1] + g) / 2;
-            data[i + 2] = (data[i + 2] + b) / 2;
+    function calculatePatchError(targetArea, patch) {
+        const targetData = targetArea.data;
+        const patchData = patch.data;
+        let error = 0;
+
+        for (let i = 0; i < targetData.length; i += 4) {
+            const dr = targetData[i] - patchData[i];
+            const dg = targetData[i + 1] - patchData[i + 1];
+            const db = targetData[i + 2] - patchData[i + 2];
+            error += dr * dr + dg * dg + db * db;
         }
 
-        context.putImageData(imageData, x - radius, y - radius);
+        return error;
     }
 });
