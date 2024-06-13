@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const uploadInput = document.getElementById('upload');
+    const upload = document.getElementById('upload');
     const healToolButton = document.getElementById('healToolButton');
     const cursorSizeInput = document.getElementById('cursorSize');
     const canvas = document.getElementById('canvas');
@@ -10,41 +10,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let usingHealTool = false;
     let cursorSize = parseInt(cursorSizeInput.value, 10);
 
-    uploadInput.addEventListener('change', handleImageUpload);
-    healToolButton.addEventListener('click', toggleHealingTool);
-    cursorSizeInput.addEventListener('input', updateCursorSize);
-    canvas.addEventListener('mousemove', updateCursorPosition);
+    upload.addEventListener('change', handleImageUpload);
+    healToolButton.addEventListener('click', () => {
+        usingHealTool = !usingHealTool;
+        cursor.style.display = usingHealTool ? 'block' : 'none';
+    });
+
+    cursorSizeInput.addEventListener('input', () => {
+        cursorSize = parseInt(cursorSizeInput.value, 10);
+        cursor.style.width = cursor.style.height = `${cursorSize}px`;
+    });
+
+    canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('click', handleCanvasClick);
 
     function handleImageUpload(event) {
         const file = event.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                image.onload = () => {
+            reader.onload = function (e) {
+                image.onload = function () {
                     canvas.width = image.width;
                     canvas.height = image.height;
                     context.drawImage(image, 0, 0);
-                };
+                }
                 image.src = e.target.result;
-            };
+            }
             reader.readAsDataURL(file);
         }
     }
 
-    function toggleHealingTool() {
-        usingHealTool = !usingHealTool;
-        cursor.style.display = usingHealTool ? 'block' : 'none';
-    }
-
-    function updateCursorSize() {
-        cursorSize = parseInt(cursorSizeInput.value, 10);
-        cursor.style.width = cursor.style.height = `${cursorSize}px`;
-    }
-
-    function updateCursorPosition(event) {
+    function handleMouseMove(event) {
         if (usingHealTool) {
             const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
             cursor.style.left = `${event.clientX - cursorSize / 2}px`;
             cursor.style.top = `${event.clientY - cursorSize / 2}px`;
         }
@@ -63,16 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const radius = cursorSize / 2;
         const targetArea = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
 
-        if (targetArea.width === 0 || targetArea.height === 0) {
-            console.error('Selected area is out of canvas bounds');
-            return;
-        }
-
         const bestPatch = findBestPatch(targetArea, x, y, radius);
         if (bestPatch) {
             context.putImageData(bestPatch, x - radius, y - radius);
-        } else {
-            console.error('No valid patch found');
+            // Blend edges
+            blendEdges(x, y, radius);
         }
     }
 
@@ -116,5 +111,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return error;
+    }
+
+    function blendEdges(centerX, centerY, radius) {
+        const blendRadius = radius / 2;
+        const blendArea = context.getImageData(centerX - blendRadius, centerY - blendRadius, blendRadius * 2, blendRadius * 2);
+        const blendData = blendArea.data;
+
+        for (let i = 0; i < blendData.length; i += 4) {
+            const dx = (i / 4) % (blendRadius * 2) - blendRadius;
+            const dy = Math.floor((i / 4) / (blendRadius * 2)) - blendRadius;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < blendRadius) {
+                const alpha = 1 - (distance / blendRadius);
+                blendData[i] = blendData[i] * alpha;
+                blendData[i + 1] = blendData[i + 1] * alpha;
+                blendData[i + 2] = blendData[i + 2] * alpha;
+            }
+        }
+
+        context.putImageData(blendArea, centerX - blendRadius, centerY - blendRadius);
     }
 });
