@@ -1,170 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Healing Spot Tool with Gradient-Based Blending</title>
-<style>
-#canvas {
-border: 1px solid black;
-cursor: none;
-}
-.cursor {
-position: absolute;
-border-radius: 50%;
-border: 2px solid red;
-pointer-events: none;
-display: none;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healing Spot Tool</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+            cursor: crosshair;
+        }
+    </style>
 </head>
 <body>
-<input type="file" id="upload" accept="image/*">
-<button id="healToolButton">Healing Spot Tool</button>
-<label for="cursorSize">Cursor Size:</label>
-<input type="range" id="cursorSize" min="5" max="100" value="20">
-<label for="blendingIntensity">Blending Intensity:</label>
-<input type="range" id="blendingIntensity" min="0.1" max="2" step="0.1" value="1">
-<canvas id="canvas"></canvas>
-<div id="cursor" class="cursor"></div>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-const upload = document.getElementById('upload');
-const healToolButton = document.getElementById('healToolButton');
-const cursorSizeInput = document.getElementById('cursorSize');
-const blendingIntensityInput = document.getElementById('blendingIntensity');
-const canvas = document.getElementById('canvas');
-const context = canvas.getContext('2d');
-const cursor = document.getElementById('cursor');
-
-let image = new Image();
-let usingHealTool = false;
-let cursorSize = parseInt(cursorSizeInput.value, 10);
-let blendingIntensity = parseFloat(blendingIntensityInput.value);
-let canvasData = null;
-
-upload.addEventListener('change', handleImageUpload);
-healToolButton.addEventListener('click', toggleHealTool);
-cursorSizeInput.addEventListener('input', updateCursorSize);
-blendingIntensityInput.addEventListener('input', updateBlendingIntensity);
-canvas.addEventListener('mousemove', handleMouseMove);
-canvas.addEventListener('click', handleCanvasClick);
-
-function handleImageUpload(event) {
-const file = event.target.files[0];
-if (file) {
-const reader = new FileReader();
-reader.onload = function (e) {
-image.onload = () => {
-canvas.width = image.width;
-canvas.height = image.height;
-context.drawImage(image, 0, 0);
-canvasData = context.getImageData(0, 0, canvas.width, canvas.height);
-};
-image.src = e.target.result;
-};
-reader.readAsDataURL(file);
-}
-}
-
-function toggleHealTool() {
-usingHealTool = !usingHealTool;
-cursor.style.display = usingHealTool ? 'block' : 'none';
-}
-
-function updateCursorSize() {
-cursorSize = parseInt(cursorSizeInput.value, 10);
-cursor.style.width = cursor.style.height = `${cursorSize}px`;
-}
-
-function updateBlendingIntensity() {
-blendingIntensity = parseFloat(blendingIntensityInput.value);
-}
-
-function handleMouseMove(event) {
-if (usingHealTool) {
-const rect = canvas.getBoundingClientRect();
-const x = event.clientX - rect.left;
-const y = event.clientY - rect.top;
-cursor.style.left = `${event.clientX - cursorSize / 2}px`;
-cursor.style.top = `${event.clientY - cursorSize / 2}px`;
-}
-}
-
-function handleCanvasClick(event) {
-if (usingHealTool) {
-const rect = canvas.getBoundingClientRect();
-const x = event.clientX - rect.left;
-const y = event.clientY - rect.top;
-inpaintSpot(x, y);
-}
-}
-
-function inpaintSpot(x, y) {
-const radius = cursorSize / 2;
-const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-const originalData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
-  const data = imageData.data;
-                const originalPixels = originalData.data;
-
-                // Convert to grayscale to simplify gradient calculations
-                const grayscale = [];
-                for (let i = 0; i < data.length; i += 4) {
-                    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                    grayscale.push(gray);
-                }
-
-                // Calculate gradients
-                const gradients = calculateGradients(grayscale, radius * 2, radius * 2);
-
-                // Apply gradients to the target area
-                for (let i = 0; i < data.length; i += 4) {
-                    const xIndex = (i / 4) % (radius * 2);
-                    const yIndex = Math.floor((i / 4) / (radius * 2));
-                    const gradientIndex = yIndex * (radius * 2) + xIndex;
-
-                    const r = originalPixels[i];
-                    const g = originalPixels[i + 1];
-                    const b = originalPixels[i + 2];
-
-                    const blended = blendWithGradient(r, g, b, gradients[gradientIndex], blendingIntensity);
-
-                    data[i] = blended[0];
-                    data[i + 1] = blended[1];
-                    data[i + 2] = blended[2];
-                    data[i + 3] = originalPixels[i + 3];
-                }
-
-                context.putImageData(imageData, x - radius, y - radius);
-            }
-
-            function calculateGradients(grayscale, width, height) {
-                const gradients = new Array(grayscale.length).fill(0);
-
-                for (let y = 1; y < height - 1; y++) {
-                    for (let x = 1; x < width - 1; x++) {
-                        const i = y * width + x;
-
-                        const gx = grayscale[i + 1] - grayscale[i - 1];
-                        const gy = grayscale[i + width] - grayscale[i - width];
-
-                        gradients[i] = Math.sqrt(gx * gx + gy * gy);
-                    }
-                }
-
-                return gradients;
-            }
-
-            function blendWithGradient(r, g, b, gradient, intensity) {
-                const factor = intensity * gradient / 255;
-                const blendedR = r * (1 - factor) + gradient * factor;
-                const blendedG = g * (1 - factor) + gradient * factor;
-                const blendedB = b * (1 - factor) + gradient * factor;
-
-                return [blendedR, blendedG, blendedB];
-            }
-        });
-    </script>
+    <h1>Healing Spot Tool</h1>
+    <input type="file" id="upload" accept="image/*">
+    <button id="healingSpotButton">Healing Spot Tool</button>
+    <input type="range" id="radiusRange" min="5" max="50" value="10">
+    <label for="radiusRange">Healing Radius: <span id="radiusValue">10</span></label>
+    <canvas id="canvas"></canvas>
+    <script src="app.js"></script>
 </body>
 </html>
