@@ -27,6 +27,8 @@
     <input type="range" id="blendingIntensity" min="0.1" max="2" step="0.1" value="1">
     <label for="searchRadius">Search Radius:</label>
     <input type="range" id="searchRadius" min="10" max="100" value="30">
+    <label for="affectedArea">Affected Area:</label>
+    <input type="range" id="affectedArea" min="0.1" max="1" step="0.1" value="0.5">
     <canvas id="canvas"></canvas>
     <div id="cursor" class="cursor"></div>
 
@@ -37,6 +39,7 @@
             const cursorSizeInput = document.getElementById('cursorSize');
             const blendingIntensityInput = document.getElementById('blendingIntensity');
             const searchRadiusInput = document.getElementById('searchRadius');
+            const affectedAreaInput = document.getElementById('affectedArea');
             const canvas = document.getElementById('canvas');
             const context = canvas.getContext('2d');
             const cursor = document.getElementById('cursor');
@@ -46,6 +49,7 @@
             let cursorSize = parseInt(cursorSizeInput.value, 10);
             let blendingIntensity = parseFloat(blendingIntensityInput.value);
             let searchRadius = parseInt(searchRadiusInput.value, 10);
+            let affectedArea = parseFloat(affectedAreaInput.value);
             let canvasData = null;
 
             upload.addEventListener('change', handleImageUpload);
@@ -65,6 +69,10 @@
 
             searchRadiusInput.addEventListener('input', () => {
                 searchRadius = parseInt(searchRadiusInput.value, 10);
+            });
+
+            affectedAreaInput.addEventListener('input', () => {
+                affectedArea = parseFloat(affectedAreaInput.value);
             });
 
             canvas.addEventListener('mousemove', handleMouseMove);
@@ -114,7 +122,7 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity);
+                    advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity, affectedArea);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -168,17 +176,18 @@
                 return score;
             }
 
-            function advancedBlendPatches(sourceData, targetData, radius, intensity) {
+            function advancedBlendPatches(sourceData, targetData, radius, intensity, affectedArea) {
                 const length = sourceData.length;
                 const sigma = radius / 3;
                 const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+                const affectRadius = radius * affectedArea;
 
                 for (let i = 0; i < length; i += 4) {
                     const dx = (i / 4) % (radius * 2) - radius;
                     const dy = Math.floor((i / 4) / (radius * 2)) - radius;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < radius) {
+                    if (dist < affectRadius) {
                         const weight = gauss(dist) * intensity;
                         sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
                         sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
