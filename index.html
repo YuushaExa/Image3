@@ -16,11 +16,23 @@
             pointer-events: none;
             display: none;
         }
+        .freeform {
+            position: absolute;
+            border: 2px solid blue;
+            pointer-events: none;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <input type="file" id="upload" accept="image/*">
     <button id="healToolButton">Healing Spot Tool</button>
+    <label for="cursorType">Cursor Type:</label>
+    <select id="cursorType">
+        <option value="circle">Circle</option>
+        <option value="freeform">Free Form</option>
+        <option value="randomCircle">Random Area in Circle</option>
+    </select>
     <label for="cursorSize">Cursor Size:</label>
     <input type="range" id="cursorSize" min="5" max="100" value="20">
     <label for="blendingIntensity">Blending Intensity:</label>
@@ -31,11 +43,13 @@
     <input type="range" id="affectedArea" min="0.1" max="1" step="0.1" value="0.5">
     <canvas id="canvas"></canvas>
     <div id="cursor" class="cursor"></div>
+    <div id="freeform" class="freeform"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const upload = document.getElementById('upload');
             const healToolButton = document.getElementById('healToolButton');
+            const cursorTypeSelect = document.getElementById('cursorType');
             const cursorSizeInput = document.getElementById('cursorSize');
             const blendingIntensityInput = document.getElementById('blendingIntensity');
             const searchRadiusInput = document.getElementById('searchRadius');
@@ -43,19 +57,29 @@
             const canvas = document.getElementById('canvas');
             const context = canvas.getContext('2d');
             const cursor = document.getElementById('cursor');
+            const freeform = document.getElementById('freeform');
             
             let image = new Image();
             let usingHealTool = false;
+            let cursorType = 'circle';
             let cursorSize = parseInt(cursorSizeInput.value, 10);
             let blendingIntensity = parseFloat(blendingIntensityInput.value);
             let searchRadius = parseInt(searchRadiusInput.value, 10);
             let affectedArea = parseFloat(affectedAreaInput.value);
             let canvasData = null;
+            let freeformPoints = [];
 
             upload.addEventListener('change', handleImageUpload);
             healToolButton.addEventListener('click', () => {
                 usingHealTool = !usingHealTool;
-                cursor.style.display = usingHealTool ? 'block' : 'none';
+                cursor.style.display = usingHealTool && cursorType === 'circle' ? 'block' : 'none';
+                freeform.style.display = usingHealTool && cursorType === 'freeform' ? 'block' : 'none';
+            });
+
+            cursorTypeSelect.addEventListener('change', () => {
+                cursorType = cursorTypeSelect.value;
+                cursor.style.display = usingHealTool && cursorType === 'circle' ? 'block' : 'none';
+                freeform.style.display = usingHealTool && cursorType === 'freeform' ? 'block' : 'none';
             });
 
             cursorSizeInput.addEventListener('input', () => {
@@ -76,6 +100,8 @@
             });
 
             canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mouseup', handleMouseUp);
             canvas.addEventListener('click', handleCanvasClick);
 
             function handleImageUpload(event) {
@@ -105,12 +131,53 @@
                 }
             }
 
+            function handleMouseDown(event) {
+                if (usingHealTool && cursorType === 'freeform') {
+                    freeformPoints = [];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    freeformPoints.push({ x, y });
+                    freeform.style.display = 'block';
+                    freeform.style.left = `${x}px`;
+                    freeform.style.top = `${y}px`;
+                    freeform.style.width = `0px`;
+                    freeform.style.height = `0px`;
+
+                    canvas.addEventListener('mousemove', drawFreeform);
+                }
+            }
+
+            function handleMouseUp(event) {
+                if (usingHealTool && cursorType === 'freeform') {
+                    canvas.removeEventListener('mousemove', drawFreeform);
+                }
+            }
+
+            function drawFreeform(event) {
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                freeformPoints.push({ x, y });
+                context.beginPath();
+                context.moveTo(freeformPoints[0].x, freeformPoints[0].y);
+                for (let point of freeformPoints) {
+                    context.lineTo(point.x, point.y);
+                }
+                context.closePath();
+                context.stroke();
+            }
+
             function handleCanvasClick(event) {
                 if (usingHealTool) {
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
-                    inpaintSpot(x, y);
+                    if (cursorType === 'circle' || cursorType === 'randomCircle') {
+                        inpaintSpot(x, y);
+                    } else if (cursorType === 'freeform') {
+                        inpaintFreeform();
+                    }
                 }
             }
 
@@ -125,6 +192,30 @@
                     advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity, affectedArea);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
+            }
+
+            function inpaintFreeform() {
+                const bounds = getFreeformBounds(freeformPoints);
+                const imageData = context.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
+                const data = imageData.data;
+
+                const patchSize = Math.max(bounds.width, bounds.height);
+                const similarPatch = findBestPatch(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, patchSize);
+                if (similarPatch) {
+                    advancedBlendPatches(data, similarPatch.data, patchSize / 2, blendingIntensity, affectedArea, freeformPoints, bounds);
+                    context.putImageData(imageData, bounds.x, bounds.y);
+                }
+            }
+
+            function getFreeformBounds(points) {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (let point of points) {
+                    if (point.x < minX) minX = point.x;
+                    if (point.y < minY) minY = point.y;
+                    if (point.x > maxX) maxX = point.x;
+                    if (point.y > maxY) maxY = point.y;
+                }
+                return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
             }
 
             function findBestPatch(x, y, size) {
@@ -176,45 +267,24 @@
                 return score;
             }
 
-            function advancedBlendPatches(sourceData, targetData, radius, intensity, affectedArea) {
+            function advancedBlendPatches(sourceData, targetData, radius, intensity, affectedArea, points = null, bounds = null) {
                 const length = sourceData.length;
                 const sigma = radius / 3;
                 const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
-                const affectRadius = radius * affectedArea;
+                const limit = radius * affectedArea;
 
                 for (let i = 0; i < length; i += 4) {
                     const dx = (i / 4) % (radius * 2) - radius;
                     const dy = Math.floor((i / 4) / (radius * 2)) - radius;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < affectRadius) {
+                    if (dist < limit) {
+                        if (cursorType === 'randomCircle' && Math.random() > 0.5) continue;
+
                         const weight = gauss(dist) * intensity;
                         sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
                         sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
                         sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
-                    }
-                }
-            }
-
-            function contentAwareFill(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const size = Math.sqrt(length / 4);
-
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < radius) {
-                        const index = (dy + radius) * (radius * 2) + (dx + radius);
-                        const sourceIndex = 4 * index;
-                        const targetIndex = 4 * index;
-
-                        const weight = Math.exp(-dist * dist / (2 * radius * radius)) * intensity;
-
-                        sourceData[sourceIndex] = weight * targetData[targetIndex] + (1 - weight) * sourceData[sourceIndex];
-                        sourceData[sourceIndex + 1] = weight * targetData[targetIndex + 1] + (1 - weight) * sourceData[sourceIndex + 1];
-                        sourceData[sourceIndex + 2] = weight * targetData[targetIndex + 2] + (1 - weight) * sourceData[sourceIndex + 2];
                     }
                 }
             }
