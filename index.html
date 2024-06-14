@@ -106,7 +106,7 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    contentAwareFill(data, similarPatch.data, radius, blendingIntensity);
+                    poissonBlend(data, similarPatch.data, radius, blendingIntensity);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -161,46 +161,62 @@
                 return score;
             }
 
-            function advancedBlendPatches(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const sigma = radius / 3;
-                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+            function poissonBlend(sourceData, targetData, radius, intensity) {
+                const size = radius * 2;
+                const channels = 4; // RGBA
 
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                // Create arrays for the blending process
+                const blendedData = new Float32Array(size * size * channels);
+                const mask = new Uint8Array(size * size);
 
-                    if (dist < radius) {
-                        const weight = gauss(dist) * intensity;
-                        sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
-                        sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
-                        sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
+                // Create a mask and initialize the blended data
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const idx = (y * size + x) * channels;
+                        const dist = Math.sqrt((x - radius) * (x - radius) + (y - radius) * (y - radius));
+
+                        if (dist < radius) {
+                            mask[y * size + x] = 1;
+                            for (let c = 0; c < channels; c++) {
+                                blendedData[idx + c] = targetData[idx + c];
+                            }
+                        } else {
+                            mask[y * size + x] = 0;
+                            for (let c = 0; c < channels; c++) {
+                                blendedData[idx + c] = sourceData[idx + c];
+                            }
+                        }
                     }
                 }
-            }
 
-            // Implement content-aware fill algorithm
-            function contentAwareFill(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const size = Math.sqrt(length / 4);
+                // Perform Poisson blending using the Jacobi method
+                const iterations = 500;
+                const lambda = 0.25 * intensity;
 
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                for (let iter = 0; iter < iterations; iter++) {
+                    for (let y = 1; y < size - 1; y++) {
+                        for (let x = 1; x < size - 1; x++) {
+                            if (mask[y * size + x]) {
+                                const idx = (y * size + x) * channels;
 
-                    if (dist < radius) {
-                        const index = (dy + radius) * (radius * 2) + (dx + radius);
-                        const sourceIndex = 4 * index;
-                        const targetIndex = 4 * index;
+                                for (let c = 0; c < channels - 1; c++) { // Skip alpha channel
+                                    const value =
+                                        0.25 * (blendedData[idx + c - channels] +
+                                                blendedData[idx + c + channels] +
+                                                blendedData[idx + c - channels * size] +
+                                                blendedData[idx + c + channels * size]) -
+                                        (sourceData[idx + c] - targetData[idx + c]);
 
-                        const weight = Math.exp(-dist * dist / (2 * radius * radius)) * intensity;
-
-                        sourceData[sourceIndex] = weight * targetData[targetIndex] + (1 - weight) * sourceData[sourceIndex];
-                        sourceData[sourceIndex + 1] = weight * targetData[targetIndex + 1] + (1 - weight) * sourceData[sourceIndex + 1];
-                        sourceData[sourceIndex + 2] = weight * targetData[targetIndex + 2] + (1 - weight) * sourceData[sourceIndex + 2];
+                                    blendedData[idx + c] = blendedData[idx + c] * (1 - lambda) + lambda * value;
+                                }
+                            }
+                        }
                     }
+                }
+
+                // Copy the blended data back to the source data
+                for (let i = 0; i < blendedData.length; i++) {
+                    sourceData[i] = blendedData[i];
                 }
             }
         });
