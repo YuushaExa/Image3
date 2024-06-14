@@ -29,12 +29,8 @@
     <input type="range" id="searchRadius" min="10" max="100" value="30">
     <label for="affectedArea">Affected Area:</label>
     <input type="range" id="affectedArea" min="0.1" max="1" step="0.1" value="0.5">
-    <label for="patchSize">Patch Size:</label>
-    <input type="range" id="patchSize" min="10" max="100" value="50">
-    <label for="similarityThreshold">Similarity Threshold:</label>
-    <input type="range" id="similarityThreshold" min="0" max="1" step="0.1" value="0.5">
-    <label for="blendMode">Blend Mode:</label>
-    <input type="range" id="blendMode" min="0" max="1" step="0.1" value="0.5">
+    <label for="feathering">Feathering:</label>
+    <input type="range" id="feathering" min="0" max="1" step="0.1" value="0.5">
     <canvas id="canvas"></canvas>
     <div id="cursor" class="cursor"></div>
 
@@ -46,9 +42,7 @@
             const blendingIntensityInput = document.getElementById('blendingIntensity');
             const searchRadiusInput = document.getElementById('searchRadius');
             const affectedAreaInput = document.getElementById('affectedArea');
-            const patchSizeInput = document.getElementById('patchSize');
-            const similarityThresholdInput = document.getElementById('similarityThreshold');
-            const blendModeInput = document.getElementById('blendMode');
+            const featheringInput = document.getElementById('feathering');
             const canvas = document.getElementById('canvas');
             const context = canvas.getContext('2d');
             const cursor = document.getElementById('cursor');
@@ -59,13 +53,9 @@
             let blendingIntensity = parseFloat(blendingIntensityInput.value);
             let searchRadius = parseInt(searchRadiusInput.value, 10);
             let affectedArea = parseFloat(affectedAreaInput.value);
-            let patchSize = parseInt(patchSizeInput.value, 10);
-            let similarityThreshold = parseFloat(similarityThresholdInput.value);
-            let blendMode = parseFloat(blendModeInput.value);
-            let canvasData = null;
-
+            let feathering = parseFloat(featheringInput.value);
             let isMouseDown = false;
-            let selectedArea = [];
+            let canvasData = null;
 
             upload.addEventListener('change', handleImageUpload);
             healToolButton.addEventListener('click', () => {
@@ -90,16 +80,8 @@
                 affectedArea = parseFloat(affectedAreaInput.value);
             });
 
-            patchSizeInput.addEventListener('input', () => {
-                patchSize = parseInt(patchSizeInput.value, 10);
-            });
-
-            similarityThresholdInput.addEventListener('input', () => {
-                similarityThreshold = parseFloat(similarityThresholdInput.value);
-            });
-
-            blendModeInput.addEventListener('input', () => {
-                blendMode = parseFloat(blendModeInput.value);
+            featheringInput.addEventListener('input', () => {
+                feathering = parseFloat(featheringInput.value);
             });
 
             canvas.addEventListener('mousemove', handleMouseMove);
@@ -130,13 +112,8 @@
                     const y = event.clientY - rect.top;
                     cursor.style.left = `${event.clientX - cursorSize / 2}px`;
                     cursor.style.top = `${event.clientY - cursorSize / 2}px`;
-
                     if (isMouseDown) {
-                        selectedArea.push({ x, y });
-                        context.beginPath();
-                        context.arc(x, y, cursorSize / 2, 0, Math.PI * 2);
-                        context.strokeStyle = 'red';
-                        context.stroke();
+                        inpaintSpot(x, y);
                     }
                 }
             }
@@ -144,22 +121,17 @@
             function handleMouseDown(event) {
                 if (usingHealTool) {
                     isMouseDown = true;
-                    selectedArea = [];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    inpaintSpot(x, y);
                 }
             }
 
-            function handleMouseUp(event) {
+            function handleMouseUp() {
                 if (usingHealTool) {
                     isMouseDown = false;
-                    processSelectedArea();
-                    selectedArea = [];
                 }
-            }
-
-            function processSelectedArea() {
-                selectedArea.forEach(({ x, y }) => {
-                    inpaintSpot(x, y);
-                });
             }
 
             function inpaintSpot(x, y) {
@@ -167,8 +139,8 @@
                 const imageData = context.getImageData(x - radius, y - radius, radius * 2, radius * 2);
                 const data = imageData.data;
 
-                const size = radius * 2;
-                const similarPatch = findBestPatch(x, y, size);
+                const patchSize = radius * 2;
+                const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
                     advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity, affectedArea);
                     context.putImageData(imageData, x - radius, y - radius);
