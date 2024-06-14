@@ -2,11 +2,9 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const upload = document.getElementById('upload');
 const healingSpotButton = document.getElementById('healingSpotButton');
-const radiusRange = document.getElementById('radiusRange');
-const radiusValue = document.getElementById('radiusValue');
 let img = new Image();
 let isHealingSpotActive = false;
-let healingRadius = parseInt(radiusRange.value);
+let healingRadius = 10;
 
 // Handle image upload
 upload.addEventListener('change', (event) => {
@@ -28,12 +26,6 @@ upload.addEventListener('change', (event) => {
 healingSpotButton.addEventListener('click', () => {
     isHealingSpotActive = !isHealingSpotActive;
     healingSpotButton.textContent = isHealingSpotActive ? 'Deactivate Healing Spot Tool' : 'Activate Healing Spot Tool';
-});
-
-// Adjust healing radius
-radiusRange.addEventListener('input', () => {
-    healingRadius = parseInt(radiusRange.value);
-    radiusValue.textContent = healingRadius;
 });
 
 // Handle canvas mouse events
@@ -58,7 +50,7 @@ canvas.addEventListener('click', (event) => {
 function drawCursor(x, y) {
     ctx.drawImage(img, 0, 0);
     ctx.beginPath();
-    ctx.arc(x, y, healingRadius, 0, 2 * 3.14);
+    ctx.arc(x, y, healingRadius, 0, 2 * Math.PI);
     ctx.strokeStyle = 'red';
     ctx.stroke();
 }
@@ -67,42 +59,16 @@ function healSpot(x, y) {
     const imageData = ctx.getImageData(x - healingRadius, y - healingRadius, healingRadius * 2, healingRadius * 2);
     const data = imageData.data;
 
-    // Perform Poisson image editing
-    const resultData = poissonEditing(data, healingRadius * 2, healingRadius * 2);
+    for (let i = 0; i < data.length; i += 4) {
+        // Simple bilinear interpolation
+        const r = (data[i] + data[i + 4] + data[i + imageData.width * 4] + data[i + imageData.width * 4 + 4]) / 4;
+        const g = (data[i + 1] + data[i + 5] + data[i + imageData.width * 4 + 1] + data[i + imageData.width * 4 + 5]) / 4;
+        const b = (data[i + 2] + data[i + 6] + data[i + imageData.width * 4 + 2] + data[i + imageData.width * 4 + 6]) / 4;
 
-    // Apply healed data to the canvas
-    for (let i = 0; i < data.length; i++) {
-        data[i] = resultData[i];
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
     }
 
     ctx.putImageData(imageData, x - healingRadius, y - healingRadius);
-}
-
-function poissonEditing(data, width, height) {
-    // Simplified Poisson image editing algorithm
-    const result = new Uint8ClampedArray(data.length);
-    
-    // Copy original data to result
-    result.set(data);
-
-    for (let iter = 0; iter < 50; iter++) { // Number of iterations
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const idx = (y * width + x) * 4;
-                
-                for (let c = 0; c < 3; c++) { // RGB channels
-                    const colorSum =
-                        data[idx - 4 + c] + // left
-                        data[idx + 4 + c] + // right
-                        data[idx - width * 4 + c] + // top
-                        data[idx + width * 4 + c]; // bottom
-
-                    result[idx + c] = (colorSum + 4 * data[idx + c]) / 8;
-                }
-                result[idx + 3] = data[idx + 3]; // Preserve alpha channel
-            }
-        }
-    }
-
-    return result;
 }
