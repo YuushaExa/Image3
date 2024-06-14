@@ -106,7 +106,7 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity);
+                    contentAwareFill(data, similarPatch.data, radius, blendingIntensity);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -180,17 +180,73 @@
                 }
             }
 
-            // Add more advanced blending techniques like content-aware fill, texture matching, or seamless cloning
+            // Implement content-aware fill algorithm
             function contentAwareFill(sourceData, targetData, radius, intensity) {
-                // Implement content-aware fill algorithm
+                const length = sourceData.length;
+                const size = Math.sqrt(length / 4);
+                const canvasPixels = new Uint32Array(canvasData.data.buffer);
+
+                // Create a priority queue for pixels to be filled
+                let priorityQueue = [];
+
+                for (let i = 0; i < length; i += 4) {
+                    const dx = (i / 4) % (radius * 2) - radius;
+                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < radius) {
+                        const index = (dy + radius) * (radius * 2) + (dx + radius);
+                        priorityQueue.push({index, priority: Math.random()});
+                    }
+                }
+
+                priorityQueue.sort((a, b) => a.priority - b.priority);
+
+                while (priorityQueue.length > 0) {
+                    const { index } = priorityQueue.pop();
+                    const dx = (index % (radius * 2)) - radius;
+                    const dy = Math.floor(index / (radius * 2)) - radius;
+
+                    const sx = dx + radius;
+                    const sy = dy + radius;
+
+                    const pixelIndex = 4 * (sy * size + sx);
+                    
+                    const neighbors = getNeighbors(sx, sy, size);
+                    const [r, g, b] = averageColor(neighbors, canvasPixels, size);
+                    
+                    sourceData[pixelIndex] = r;
+                    sourceData[pixelIndex + 1] = g;
+                    sourceData[pixelIndex + 2] = b;
+                }
             }
 
-            function textureMatching(sourceData, targetData, radius, intensity) {
-                // Implement texture matching algorithm
+            function getNeighbors(x, y, size) {
+                const neighbors = [];
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
+                            neighbors.push({ x: nx, y: ny });
+                        }
+                    }
+                }
+                return neighbors;
             }
 
-            function seamlessCloning(sourceData, targetData, radius, intensity) {
-                // Implement seamless cloning algorithm
+            function averageColor(neighbors, canvasPixels, size) {
+                let r = 0, g = 0, b = 0, count = 0;
+                for (const { x, y } of neighbors) {
+                    const pixelIndex = y * size + x;
+                    const pixel = canvasPixels[pixelIndex];
+                    r += (pixel & 0xff0000) >> 16;
+                    g += (pixel & 0x00ff00) >> 8;
+                    b += pixel & 0x0000ff;
+                    count++;
+                }
+                return [r / count, g / count, b / count];
             }
         });
     </script>
