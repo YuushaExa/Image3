@@ -106,7 +106,7 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    blendPatches(data, similarPatch.data, radius, blendingIntensity);
+                    advancedBlendPatches(data, similarPatch.data, radius, blendingIntensity);
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -161,7 +161,7 @@
                 return score;
             }
 
-            function blendPatches(sourceData, targetData, radius, intensity) {
+            function advancedBlendPatches(sourceData, targetData, radius, intensity) {
                 const length = sourceData.length;
                 const sigma = radius / 3;
                 const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
@@ -178,6 +178,19 @@
                         sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
                     }
                 }
+            }
+
+            // Add more advanced blending techniques like content-aware fill, texture matching, or seamless cloning
+            function contentAwareFill(sourceData, targetData, radius, intensity) {
+                // Implement content-aware fill algorithm
+            }
+
+            function textureMatching(sourceData, targetData, radius, intensity) {
+                // Implement texture matching algorithm
+            }
+
+            function seamlessCloning(sourceData, targetData, radius, intensity) {
+                // Implement seamless cloning algorithm
             }
         });
     </script>
