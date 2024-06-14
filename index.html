@@ -28,6 +28,7 @@
     <canvas id="canvas"></canvas>
     <div id="cursor" class="cursor"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const upload = document.getElementById('upload');
@@ -106,7 +107,17 @@
                 const patchSize = radius * 2;
                 const similarPatch = findBestPatch(x, y, patchSize);
                 if (similarPatch) {
-                    contentAwareFill(data, similarPatch.data, radius, blendingIntensity);
+                    // Create mask where the inpainting will occur
+                    const mask = new Uint8Array(patchSize * patchSize).fill(1);
+
+                    // Apply Poisson blending
+                    const blendedData = poissonBlend(data, similarPatch.data, mask, patchSize, patchSize);
+
+                    // Update the canvas with the blended data
+                    for (let i = 0; i < blendedData.length; i++) {
+                        data[i] = blendedData[i];
+                    }
+
                     context.putImageData(imageData, x - radius, y - radius);
                 }
             }
@@ -161,47 +172,56 @@
                 return score;
             }
 
-            function advancedBlendPatches(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const sigma = radius / 3;
-                const gauss = (d) => Math.exp(-(d * d) / (2 * sigma * sigma));
+            // Poisson blending function
+            function poissonBlend(sourceData, targetData, mask, width, height) {
+                const N = width * height;
+                const A = new Array(N).fill(0).map(() => new Array(N).fill(0));
+                const b = new Array(N).fill(0);
+                const result = new Uint8ClampedArray(sourceData.length);
 
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                const getIndex = (x, y) => y * width + x;
 
-                    if (dist < radius) {
-                        const weight = gauss(dist) * intensity;
-                        sourceData[i] = weight * targetData[i] + (1 - weight) * sourceData[i];
-                        sourceData[i + 1] = weight * targetData[i + 1] + (1 - weight) * sourceData[i + 1];
-                        sourceData[i + 2] = weight * targetData[i + 2] + (1 - weight) * sourceData[i + 2];
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = getIndex(x, y);
+                        if (mask[idx]) {
+                            A[idx][idx] = 4;
+                            b[idx] = 4 * sourceData[idx];
+
+                            if (x > 0) {
+                                A[idx][getIndex(x - 1, y)] = -1;
+                                b[idx] -= targetData[getIndex(x - 1, y)];
+                            }
+                            if (x < width - 1) {
+                                A[idx][getIndex(x + 1, y)] = -1;
+                                b[idx] -= targetData[getIndex(x + 1, y)];
+                            }
+                            if (y > 0) {
+                                A[idx][getIndex(x, y - 1)] = -1;
+                                b[idx] -= targetData[getIndex(x, y - 1)];
+                            }
+                            if (y < height - 1) {
+                                A[idx][getIndex(x, y + 1)] = -1;
+                                b[idx] -= targetData[getIndex(x, y + 1)];
+                            }
+                        } else {
+                            A[idx][idx] = 1;
+                            b[idx] = targetData[idx];
+                        }
                     }
                 }
-            }
 
-            // Implement content-aware fill algorithm
-            function contentAwareFill(sourceData, targetData, radius, intensity) {
-                const length = sourceData.length;
-                const size = Math.sqrt(length / 4);
+                // Solve the linear system A * x = b
+                const x = numeric.solve(A, b);
 
-                for (let i = 0; i < length; i += 4) {
-                    const dx = (i / 4) % (radius * 2) - radius;
-                    const dy = Math.floor((i / 4) / (radius * 2)) - radius;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < radius) {
-                        const index = (dy + radius) * (radius * 2) + (dx + radius);
-                        const sourceIndex = 4 * index;
-                        const targetIndex = 4 * index;
-
-                        const weight = Math.exp(-dist * dist / (2 * radius * radius)) * intensity;
-
-                        sourceData[sourceIndex] = weight * targetData[targetIndex] + (1 - weight) * sourceData[sourceIndex];
-                        sourceData[sourceIndex + 1] = weight * targetData[targetIndex + 1] + (1 - weight) * sourceData[sourceIndex + 1];
-                        sourceData[sourceIndex + 2] = weight * targetData[targetIndex + 2] + (1 - weight) * sourceData[sourceIndex + 2];
-                    }
+                for (let i = 0; i < N; i++) {
+                    result[i * 4] = x[i];
+                    result[i * 4 + 1] = x[i];
+                    result[i * 4 + 2] = x[i];
+                    result[i * 4 + 3] = 255;  // Fully opaque
                 }
+
+                return result;
             }
         });
     </script>
